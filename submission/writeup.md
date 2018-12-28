@@ -13,10 +13,10 @@ The neural network should obtain an accuracy greater than or equal to 40% (0.40)
 
 ## My submission
 
-1. Filled out  ```model_training.ipynb``` [here]()
-2. A HTML version of the ```model_training.ipynb``` notebook [here]()
+1. Filled out  ```model_training.ipynb``` [here](run/model_training.ipynb)
+2. A HTML version of the ```model_training.ipynb``` notebook [here](run/model_training.html)
 3. This writeup, see below
-4. The model and weights file in the ```.h5``` file format [here]()
+4. The model and weights file in the ```.h5``` file format [here](run/data/weights/model_weights.h5)
 
 The neural network had a final score of __0.412932498048__ as you can see in the notebook.
 
