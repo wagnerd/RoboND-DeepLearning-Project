@@ -9,41 +9,81 @@ The submission must include these items:
 3. This writeup report (as md or pdf file)
 4. The model and weights file in the ```.h5``` file format
 
-Also the submission must fullfill the following 
-1. 
-
-
 The neural network should obtain an accuracy greater than or equal to 40% (0.40) using the Intersection over Union (IoU) metric.
+
+## My submission
+
+1. Filled out  ```model_training.ipynb``` [here]()
+2. A HTML version of the ```model_training.ipynb``` notebook [here]()
+3. This writeup, see below
+4. The model and weights file in the ```.h5``` file format [here]()
+
+The neural network had a final score of __0.412932498048__ as you can see in the notebook.
 
 ## Network architecture
 
 The architecture of the network is based on a Fully Convolutional Network (FCN).
 One of the main advantages of the FCN is the ability to retain spatial information.
-The FCN is made up of three blocks:
+The FCN is made up of atleast three blocks:
 
 1. Encoder Block
 2. 1x1 Convolution Block
 3. Decoder Block
 
-In this solution, two encoder/decoder blocks were used. This leads to the follwoing architecture:
+In this solution, three encoder/decoder blocks were used. This leads to the following architecture:
+
 ![architecture](fcn_architecture.png)
 
 ### Encoder Block
 
-The encoder extracts the main features from an image whereas the decoder maps them to the original image. Each layer of the encoder used in this project consists of a separable convolutional layer and a batch normalization with an activation function included. The decoder consists of a bilinear upsampling layer, a concatenation layer and a separable convolutional layer.
+The encoder block is used to extract the main features from an image.
+Each layer of the encoder used in this project consists of a separable convolutional layer and a batch normalization with an activation function included.
 
-Each layer of the encoder has a clear function. The separable convolutional layer reduces the number of parameters of the network and identifies the main features (extracts spatial information). The batch normalization layer, as the name implies, normalizes the inputs to each layer within the network to have a well conditioned problem. The activation function (a RELU in this case) adds non-linearities to the network for it to better fit the model.
+Each layer of the encoder has a clear function. The separable convolutional layer reduces the number of parameters of the network and identifies the main features (extracting spatial information).
+The batch normalization layer, normalizes the inputs to each layer within the network to have a well conditioned problem.
+The used RELU activation function adds non-linearities to the network for it to better fit the model.
+
+The implemented code for the encoder looks like this:
 
 ```python
+def separable_conv2d_batchnorm(input_layer, filters, strides=1):
+    output_layer = SeparableConv2DKeras(filters=filters,kernel_size=3, strides=strides,
+                             padding='same', activation='relu')(input_layer)
+    output_layer = layers.BatchNormalization()(output_layer)
+    return output_layer
+
 def encoder_block(input_layer, filters, strides):
     # Create a separable convolution layer using the separable_conv2d_batchnorm() function.
     output_layer = separable_conv2d_batchnorm(input_layer, filters, strides)
     return output_layer
 ```
 
+### 1x1 Convolution Block
+
+Between the decoder block and the encoder block, there is a 1x1 convolution layer which increases the depth of the network while preserving spatial information.
+This has also the advantage that during inference we can feed images of any given size into the trained network. The alternative would be a fully-connected layer, that keeps the number of features the same but needs a fixed image size.
+
+In code the 1x1 convolutional block is implemtened as below:
+
+```python
+def conv2d_batchnorm(input_layer, filters, kernel_size=3, strides=1):
+    output_layer = layers.Conv2D(filters=filters, kernel_size=kernel_size, strides=strides, 
+                      padding='same', activation='relu')(input_layer)
+    output_layer = layers.BatchNormalization()(output_layer)
+    return output_layer
+```
+
 ### Decoder Block
 
-On the decoder side, the bilinear upsampling layer expands the dimensions of the encoded information (the objective is to reach the size of the original image). The concatenation layer is similar to skipping the connections, which is a technique that allows one layer to use information from different resolution scales (from layers prior to the preceding one). Finally, the last piece of each decoder layer is another separable convolutional layer.
+The decoder consists of:
+
+* A bilinear upsampling layer  
+ This layer expands the dimensions of the encoded information (the objective is to reach the size of the original image)
+* A concatenation layer  
+ This layer is similar to skipping the connections, which is a technique that allows one layer to use information from different resolution scales (from layers prior to the preceding one)
+* A separable convolutional layer  
+
+The code for the decoder looks like this:
 
 ```python
 def decoder_block(small_ip_layer, large_ip_layer, filters):
@@ -56,77 +96,72 @@ def decoder_block(small_ip_layer, large_ip_layer, filters):
     return output_layer
 ```
 
-### 1x1 Convolution Block
-
-Between the decoder and the encoder, there is a 1x1 convolution layer that increases the depth of the network while preserving spatial information. This is very common for object detection and semantic segmentation. Additionally, it has the advantage that during inference we can feed images of any size into the trained network. The alternative would be a fully-connected layer, which keeps the number of features but needs a fixed image size.
-
 ### Model
+
+Finally the complete models as implemented code:
 
 ```python
 def fcn_model(inputs, num_classes):
-    filters_1 = 32
-    filters_2 = 64
-    filters_3 = 128
-    strides = 2
-    # Add Encoder Blocks.
-    # Remember that with each encoder layer, the depth of your model (the number of filters) increases.
-    encoded_1 = encoder_block(inputs, filters_1, strides)
-    encoded_2 = encoder_block(encoded_1, filters_2, strides)
-    # Add 1x1 Convolution layer using conv2d_batchnorm().
-    one_by_one = conv2d_batchnorm(input_layer=encoded_2,  filters=filters_3, kernel_size=1, strides=1)
-    # Add the same number of Decoder Blocks as the number of Encoder Blocks
-    decoded_1 = decoder_block(small_ip_layer=one_by_one, large_ip_layer=encoded_1, filters=filters_2)
-    decoded_2 = decoder_block(small_ip_layer=decoded_1, large_ip_layer=inputs, filters=filters_1)
-    # The function returns the output layer of your model, which is the final layer obtained from the last decoder_block()
-    return layers.Conv2D(num_classes, 3, activation='softmax', padding='same')(decoded_2)
+    # Encoder Blocks. 
+    encoded_1 = encoder_block(inputs, filters=32, strides=2)
+    encoded_2 = encoder_block(encoded_1, filters=64, strides=2)
+    encoded_3 = encoder_block(encoded_2, filters=128, strides=2)
+    
+    # 1x1 Convolution layer using conv2d_batchnorm().
+    one_by_one = conv2d_batchnorm(encoded_3, filters=256, kernel_size=1, strides=1)
+    
+    # Same number of Decoder Blocks as the number of Encoder Blocks
+    decoded_1 = decoder_block(small_ip_layer=one_by_one, large_ip_layer=encoded_2, filters=128)
+    decoded_2 = decoder_block(small_ip_layer=decoded_1, large_ip_layer=encoded_1, filters=64)
+    decoded_3 = decoder_block(small_ip_layer=decoded_2, large_ip_layer=inputs, filters=32)
+    
+    # The function returns the output layer of your model. "x" is the final layer obtained from the last decoder_block()
+    return layers.Conv2D(num_classes, kernel_size=1, activation='softmax', padding='same')(decoded_3)
 ```
+
+The values of the filters were chosen based on the input image shape of 160x160x3.
 
 ## Hyper Parameters
 
 The hyper parameters for the FCN are defined as follows:
 
+* __learning_rate:__  
+ controls how much the weights of our network are adjusted with respect to the loss gradient
 * __batch_size:__  
-  number of training samples/images that get propagated through the network in a single pass.
+  number of training samples/images that get propagated through the network in a single pass
 * __num_epochs:__  
-  number of times the entire training dataset gets propagated through the network.
+  number of times the entire training dataset gets propagated through the network
 * __steps_per_epoch:__  
-  number of batches of training images that go through the network in 1 epoch.
+  number of batches of training images that go through the network in 1 epoch
 * __validation_steps:__  
-  number of batches of validation images that go through the network in 1 epoch. This is similar to steps_per_epoch, except validation_steps is for the validation dataset. 
+  number of batches of validation images that go through the network in 1 epoch. This is similar to steps_per_epoch, except validation_steps is for the validation dataset.
 * __workers:__  
-  maximum number of processes to spin up. This can affect the training speed and is dependent on the hardware. 
+  maximum number of processes to spin up. This can affect the training speed and is dependent on the hardware.
+* __stride:__  
+  The amount by which the filter slides is referred to as the 'stride'. Increasing the stride reduces the size of your model by reducing the number of total patches each layer observes. This usually comes with a reduction in accuracy.
 
-Additionally 
+The final parameters for the used model are:
 
-From the segmentation lab the following parameter sets were used:
+```python
+learning_rate = 0.0015
+batch_size = 25
+num_epochs = 50
+steps_per_epoch = 4131/batch_size
+validation_steps = 50
+workers = 2
+```
 
-| run | # encoders/decoders| filter(s) |  learning rate | batch size | # epochs | steps per epoch | validation steps | workers |
-| ----- | ---- | ------ | ---- | ------------------ | --- | --- | --- | --- |
-| run1  | 1    | 20     | 0.05               | 50  | 10  | 200 | 50  | 2  |
-| run2  | 1    | 20     | 0.05               | 50  | 20  | 200 | 50  | 2  |
-| run3  | 1    | 20     | 0.05               | 100 | 20  | 200 | 50  | 2  |
-| run4  | 1    | 20     | 0.05               | 100 | 50  | 200 | 50  | 2  |
-| run5  | 2    | 20/40  | 0.05               | 100 | 50  | 200 | 50  | 2  |
+The values for ```validation_steps``` and ```workers``` have not
+been changed and are still the default values from the notebook.
+The value for ```steps_per_epoch``` was set to the hint given in the comments where 4131 is the number of images provided.
 
-And for these runs the following results have been collected:
+For the other parameters, I have chosen the parameters based on my experiments in the segmentation lab.
 
-| run  | average IoU for background | average IoU for other people | average IoU for hero | global average IoU |  
-| ---- | ----               | ------------------  | ---                  | ---                 |
-| run1 | 0.9828951983470107 | 0.10618387638037707 | 0.044549251198274686 | 0.37787610864188753 |
-| run2 | 0.9803128523368182 | 0.17413905069974045 | 0.11007914667321698  | 0.4215103499032586  |
-| run3 | 0.9853443167216672 | 0.13480468831835557 | 0.10498744888605738  | 0.4083788179753601  |
-| run4 | 0.9821987577085073 | 0.1917738857966337  | 0.12318991573151504  | 0.432387519745552   |
-| run5 | 0.9904808576661485 | 0.27309245560181955 | 0.1393159806112834   | 0.46762976462641714 |
+Testing the optimal number of epochs, I tried various values from 10, 20 to 50. Every increase here
+improved the IoU slightly. Finally I stayed with 50 epochs because the training already takes a long time now and improvements seem to become smaller.
 
-
-
-The intersection over union (IoU) is commonly used to messure the performance of a model on the segmentic segmentation task.
-
-intersection set / union set
-
-
-stride:
-The amount by which the filter slides is referred to as the 'stride'. The stride is a hyperparameter which you, the engineer, can tune. Increasing the stride reduces the size of your model by reducing the number of total patches each layer observes. However, this usually comes with a reduction in accuracy.
+The learning rate started at 0.05, which is relatively high, but showed a good basis in the segmentation lab. But for the final project this was too high.
+The loss was fluctuating a lot. I decreased the learning rate to ```0.001``` and also tried ```0.01```. In the end I stayed on ```0.0015```, because here was the smoothest learning curve in the plots.
 
 ### Various follow-me scenarios
 
@@ -136,4 +171,5 @@ The network is currently based on the standard architecture, so there shouldn't 
 
 1. Collect more data to train the model. This could easily be done by investing more time.
 2. Optimize the hyper parameters. Instead of guessing and running each step by
-   hand, we could use an evolutionary algorithm to optimize the parameters for us. Since we already have the parameters and our fitness value (IoU), 
+   hand, we could use an evolutionary algorithm to optimize the parameters for us. Since we already have the parameters and our fitness value (IoU), this should be
+   reachable without big effort.
